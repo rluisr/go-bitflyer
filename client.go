@@ -117,11 +117,10 @@ func (p *Client) _newRequest(req Require) *http.Request {
 
 	if req.IsPrivate() {
 		nonce := time.Now().String()
-		var path = u.Path
 		if u.RawQuery != "" {
-			path += "?" + u.RawQuery
+			u.Path += "?" + u.RawQuery
 		}
-		payload := nonce + req.Method() + path + string(req.Payload())
+		payload := nonce + req.Method() + u.Path + string(req.Payload())
 
 		key, _ := p.Auth.Get()
 		r.Header.Set("Content-Type", "application/json")

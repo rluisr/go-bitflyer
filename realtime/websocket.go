@@ -15,9 +15,8 @@ import (
 )
 
 const (
-	ENDPOINT                   = "wss://ws.lightstream.bitflyer.com/json-rpc"
-	READDEADLINE time.Duration = 300 * time.Second
-	PINGTIMER    time.Duration = 3 * time.Minute
+	Endpoint  = "wss://ws.lightstream.bitflyer.com/json-rpc"
+	PingTimer = 3 * time.Minute
 )
 
 type Client struct {
@@ -25,16 +24,13 @@ type Client struct {
 	ctx  context.Context
 }
 
-func New(ctx context.Context) *Client {
-	conn, _, err := websocket.DefaultDialer.Dial(ENDPOINT, nil)
-	if err != nil {
-		log.Fatal(err)
-	}
+func New(ctx context.Context) (*Client, error) {
+	conn, _, err := websocket.DefaultDialer.Dial(Endpoint, nil)
 
 	return &Client{
 		conn: conn,
 		ctx:  ctx,
-	}
+	}, err
 }
 
 func (p *Client) Close() error {
@@ -67,6 +63,8 @@ func (p *Client) Connect(conf *auth.Client, channels, symbols []string, send cha
 			res := new(Response)
 			_, msg, err := p.conn.ReadMessage()
 			if err != nil {
+				log.Printf("read message error: %v\n", err)
+
 				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 					continue
 				} else if strings.Contains(err.Error(), "scheduled maintenance") { // maintenance
@@ -81,7 +79,7 @@ func (p *Client) Connect(conf *auth.Client, channels, symbols []string, send cha
 				continue
 			}
 
-			channelname, err := jsonparser.GetString(msg, "params", "channel")
+			channelName, err := jsonparser.GetString(msg, "params", "channel")
 			if err != nil {
 				send <- res._set(err)
 				continue
@@ -93,53 +91,53 @@ func (p *Client) Connect(conf *auth.Client, channels, symbols []string, send cha
 			}
 
 			switch {
-			case strings.HasPrefix(channelname, Ticker):
+			case strings.HasPrefix(channelName, Ticker):
 				// fmt.Println(Ticker)
 				res.Types = TickerN
-				res.ProductCode = strings.Replace(channelname, Ticker, "", 1)
+				res.ProductCode = strings.Replace(channelName, Ticker, "", 1)
 				if err := json.Unmarshal(data, &res.Ticker); err != nil {
 					res.Types = ErrorN
 					res._set(fmt.Errorf("[WARN]: cant unmarshal ticker %+v", err))
 				}
-			case strings.HasPrefix(channelname, Executions):
+			case strings.HasPrefix(channelName, Executions):
 				// fmt.Println(Executions)
 				res.Types = ExecutionsN
-				res.ProductCode = strings.Replace(channelname, Executions, "", 1)
+				res.ProductCode = strings.Replace(channelName, Executions, "", 1)
 				if err := json.Unmarshal(data, &res.Executions); err != nil {
 					res.Types = ErrorN
 					res._set(fmt.Errorf("[WARN]: cant unmarshal executions %+v", err))
 				}
-			case strings.HasPrefix(channelname, BoardSnap):
+			case strings.HasPrefix(channelName, BoardSnap):
 				// fmt.Println(BoardSnap)
 				res.Types = BoardSnapN
-				res.ProductCode = strings.Replace(channelname, BoardSnap, "", 1)
+				res.ProductCode = strings.Replace(channelName, BoardSnap, "", 1)
 				if err := json.Unmarshal(data, &res.Board); err != nil {
 					res.Types = ErrorN
 					res._set(fmt.Errorf("[WARN]: cant unmarshal board snap %+v", err))
 				}
-			case strings.HasPrefix(channelname, Board):
+			case strings.HasPrefix(channelName, Board):
 				// fmt.Println(Board)
 				res.Types = BoardN
-				res.ProductCode = strings.Replace(channelname, Board, "", 1)
+				res.ProductCode = strings.Replace(channelName, Board, "", 1)
 				if err := json.Unmarshal(data, &res.Board); err != nil {
 					res.Types = ErrorN
 					res._set(fmt.Errorf("[WARN]: cant unmarshal board update %+v", err))
 				}
-			case strings.HasPrefix(channelname, ChildOrders):
+			case strings.HasPrefix(channelName, ChildOrders):
 				// fmt.Println(ChildOrders)
 				res.Types = ChildOrdersN
 				if err := json.Unmarshal(data, &res.ChildOrders); err != nil {
 					res.Types = ErrorN
 					res._set(fmt.Errorf("[WARN]: cant unmarshal childorder %+v", err))
 				}
-			case strings.HasPrefix(channelname, ParentOrders):
+			case strings.HasPrefix(channelName, ParentOrders):
 				// fmt.Println(ParentOrders)
 				res.Types = ParentOrdersN
 				if err := json.Unmarshal(data, &res.ParentOrders); err != nil {
 					res.Types = ErrorN
 					res._set(fmt.Errorf("[WARN]: cant unmarshal parentorder %+v", err))
 				}
-			case strings.HasPrefix(channelname, Error):
+			case strings.HasPrefix(channelName, Error):
 				// fmt.Println("error!")
 				res.Types = ErrorN
 				res._set(err)
@@ -153,7 +151,7 @@ func (p *Client) Connect(conf *auth.Client, channels, symbols []string, send cha
 	}()
 
 	go func() {
-		t := time.NewTicker(PINGTIMER)
+		t := time.NewTicker(PingTimer)
 		defer t.Stop()
 		for {
 			select {
@@ -168,5 +166,5 @@ func (p *Client) Connect(conf *auth.Client, channels, symbols []string, send cha
 	}()
 
 	<-p.ctx.Done()
-	log.Println("recived context cancel from parent, websocket closed")
+	log.Println("received context cancel from parent, websocket closed")
 }
