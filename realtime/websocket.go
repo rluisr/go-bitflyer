@@ -158,8 +158,10 @@ func (p *Client) Connect(conf *auth.Client, channels, symbols []string, send cha
 			case <-p.ctx.Done():
 				return
 			case <-t.C:
-				if err := p.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
-					log.Println("websocket ping error, ", err.Error())
+				err := p.conn.WriteMessage(websocket.PingMessage, []byte{})
+				if err != nil {
+					log.Println("ping error detected. will reconnect err: ", err.Error())
+					p.Connect(conf, channels, symbols, send)
 				}
 			}
 		}
